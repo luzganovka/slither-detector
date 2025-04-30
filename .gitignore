@@ -1,4 +1,11 @@
 .*
 !.gitignore
 
-.pdf
+slither_my_plugin/detectors/__pycache__
+slither_my_plugin/__pycache__
+slither_my_plugins.egg-info
+slither_venv
+dev
+*.pdf
+*.old
+*.tmp

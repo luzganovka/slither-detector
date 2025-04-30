@@ -6,4 +6,6 @@ slither_my_plugin/__pycache__
 slither_my_plugins.egg-info
 slither_venv
 dev
-.pdf
+*.pdf
+*.old
+*.tmp

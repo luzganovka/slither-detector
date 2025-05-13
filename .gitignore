@@ -9,3 +9,4 @@ dev
 *.pdf
 *.old
 *.tmp
+contracts/deployed

@@ -2,8 +2,41 @@
 
 # --- Конфигурация ---
 SETUP_PY_PATH="$HOME/Study/slither_detector_module/code"
-CONTRACTS_DIR="$HOME/Study/slither_detector_module/smartbugs-curated"
-CONTRACT_NAMES=("arithmetic/overflow_single_tx.sol" "../code/contracts/eip712.vuln.sol")
+CONTRACTS_DIR="$HOME/Study/slither_detector_module/smartbugs-curated/access_control"
+CONTRACT_NAMES=(\
+    # "access_control/unprotected0.sol" \
+    # "arithmetic/overflow_single_tx.sol" \
+    # "bad_randomness/lottery.sol" \
+    # "denial_of_service/dos_simple.sol" \
+    # "front_running/FindThisHash.sol" \
+    # "reentrancy/reentrancy_simple.sol" \
+    # "short_addresses/short_address_example.sol" \
+    # "time_manipulation/roulette.sol" \
+    # "unchecked_low_level_calls/lotto.sol" \
+    # "other/naivereceiver.sol" \
+    # "../code/contracts/eip712.vuln.sol" \
+
+    # "arbitrary_location_write_simple.sol" \
+    # "FibonacciBalance.sol" \
+    "incorrect_constructor_name1.sol" \
+    'incorrect_constructor_name2.sol' \
+    'incorrect_constructor_name3.sol' \
+    # 'mapping_write.sol' \
+    'multiowned_vulnerable.sol' \
+    # 'mycontract.sol' \
+    # 'parity_wallet_bug_1.sol' \
+    # 'parity_wallet_bug_2.sol' \
+    # 'phishable.sol' \
+    # 'proxy.sol' \
+    # 'rubixi.sol' \
+    # 'simple_suicide.sol' \
+    'unprotected0.sol' \
+    'wallet_02_refund_nosub.sol' \
+    'wallet_03_wrong_constructor.sol' \
+    'wallet_04_confused_sign.sol' \
+)
+
+
 
 # Флаги анализа
 USE_ALL_DETECTORS=true       # Проверить всеми доступными детекторами (включая кастомные)

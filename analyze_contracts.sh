@@ -3,11 +3,14 @@
 # --- Конфигурация ---
 
 REQUIRED_SOLC="0.4.23"  # Нужная версия
+# REQUIRED_SOLC="0.8.0"  # Нужная версия
+# ALL_SOLCS=("0.4.26" "0.5." "0.6." "0.7." "0.8.")
 SETUP_PY_PATH="$HOME/Study/slither_detector_module/code"
 DETECTORS="incorrect-eip712,reentrancy-eth,unchecked-lowlevel"  # Список детекторов (через запятую)
 # CONTRACTS_DIR="$HOME/Study/slither_detector_module/smartbugs-curated" 
 CONTRACTS_DIR="$HOME/Study/slither_detector_module/smartbugs-curated"                                     # Путь к директории с контрактами
-CONTRACT_NAMES=("arithmetic/overflow_single_tx.sol")  # Массив контрактов
+CONTRACT_NAMES=("arithmetic/overflow_single_tx.sol" "../code/contracts/eip712.vuln.sol")  # Массив контрактов
+# CONTRACT_NAMES=("../code/contracts/eip712.vuln.sol")  # Массив контрактов
 
 DELIM="----------------------------------------------------------"
 
@@ -46,7 +49,7 @@ for contract in "${CONTRACT_NAMES[@]}"; do
     echo "📋 Анализ $contract..."
     # slither "$contract_path" --detect "$DETECTORS" --solc-solcs-bin "$(which solc)" #--json - | jq .  # Красивое форматирование JSON через jq
     # slither "$contract_path" --detect "incorrect-eip712" --solc-solcs-bin "$(which solc)" #--json - | jq .  # Красивое форматирование JSON через jq
-    slither "$contract_path" --solc-solcs-bin "$(which solc)"
+    slither "$contract_path"                             --solc-solcs-bin "$(which solc)"
     echo $DELIM
 done
 

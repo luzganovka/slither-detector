@@ -3,78 +3,82 @@ from slither.core.variables.state_variable import StateVariable
 
 """Различные эвристики для проверки, что функция - конструктор"""
 
-
-def _called_at_beginning(function) -> bool:
-    # Эвристика 1: Функция вызывается только внутри конструктора (если есть вызовы)
-    for ref in function.references:
-        if ref.node and not ref.node.function.is_constructor:
-            return False
-    return True
-
-def _inits_critical_variables(function):
-    # Функция инициализирует критичные переменные (owner, root и т.д.)
-    CRITICAL_VARS = {"owner", "admin", "root", "creator"}
-    written_vars = {var.name.lower() for node in function.nodes 
-                   for var in node.state_variables_written}
-    if not written_vars.intersection(CRITICAL_VARS):
-        return False
-    return True
-
-def _has_few_args(function):
-    _TOO_MANY_ARGS = 5  # У конструкторов обычно мало параметров
-    # Игнорируем функции с параметрами, которые не похожи на конструкторы
-    if len(function.parameters) > _TOO_MANY_ARGS:
-        return False
-        
-    return True
-
-def _inits_all_variables(contract, function) -> bool:
+class CriticalFunctionsSearcher:
     
-    # Собираем все state-переменные контракта (включая унаследованные)
-    if not contract.state_variables:
-        return False
+    def __init__(self) -> None:
+        return None
 
-    all_state_vars = contract.state_variables + [
-        var for parent in contract.inheritance 
-        for var in parent.state_variables 
-        if var not in contract.state_variables
-    ]
-
-    # Собираем все переменные, инициализируемые функцией
-    written_vars = set()
-    for node in function.nodes:
-        written_vars.update(node.state_variables_written)
-
-    # Проверяем, что записаны ВСЕ переменные (или их значимая часть)
-    if written_vars.issuperset(all_state_vars):
+    def _called_at_beginning(self, function) -> bool:
+        # Эвристика 1: Функция вызывается только внутри конструктора (если есть вызовы)
+        for ref in function.references:
+            if ref.node and not ref.node.function.is_constructor:
+                return False
         return True
-    else:
-        return False
-    
 
-def find_potential_constructors(contract: Contract) -> list:
-    """
-    Находит функции, которые инициализируют все state-переменные.
-    Дополнительные проверки снижают количество ложных срабатываний.
-    """
+    def _inits_critical_variables(self, function):
+        # Функция инициализирует критичные переменные (owner, root и т.д.)
+        CRITICAL_VARS = {"owner", "admin", "root", "creator"}
+        written_vars = {var.name.lower() for node in function.nodes 
+                    for var in node.state_variables_written}
+        if not written_vars.intersection(CRITICAL_VARS):
+            return False
+        return True
 
-    potential_constructors = []
+    def _has_few_args(self, function):
+        _TOO_MANY_ARGS = 5  # У конструкторов обычно мало параметров
+        # Игнорируем функции с параметрами, которые не похожи на конструкторы
+        if len(function.parameters) > _TOO_MANY_ARGS:
+            return False
+            
+        return True
 
-    for function in contract.functions:
+    def _inits_all_variables(self, contract, function) -> bool:
         
-        # Игнорируем view/pure функции и конструкторы, которые Slither уже нашёл
-        if function.is_constructor or function.view or function.pure:
-            continue
+        # Собираем все state-переменные контракта (включая унаследованные)
+        if not contract.state_variables:
+            return False
 
-        # Проверка всех условий
-        if      _has_few_args(function) \
-            and _inits_all_variables(contract, function) \
-            and _called_at_beginning(function) \
-            or  _inits_critical_variables(function) \
-            :
-            potential_constructors.append(function)
+        all_state_vars = contract.state_variables + [
+            var for parent in contract.inheritance 
+            for var in parent.state_variables 
+            if var not in contract.state_variables
+        ]
 
-    return potential_constructors
+        # Собираем все переменные, инициализируемые функцией
+        written_vars = set()
+        for node in function.nodes:
+            written_vars.update(node.state_variables_written)
+
+        # Проверяем, что записаны ВСЕ переменные (или их значимая часть)
+        if written_vars.issuperset(all_state_vars):
+            return True
+        else:
+            return False
+        
+
+    def find_potential_constructors(self, contract: Contract) -> list:
+        """
+        Находит функции, которые инициализируют все state-переменные.
+        Дополнительные проверки снижают количество ложных срабатываний.
+        """
+
+        potential_constructors = []
+
+        for function in contract.functions:
+            
+            # Игнорируем view/pure функции и конструкторы, которые Slither уже нашёл
+            if function.is_constructor or function.view or function.pure:
+                continue
+
+            # Проверка всех условий
+            if      self._has_few_args(function) \
+                and self._inits_all_variables(contract, function) \
+                and self._called_at_beginning(function) \
+                or  self._inits_critical_variables(function) \
+                :
+                potential_constructors.append(function)
+
+        return potential_constructors
 
 
 
@@ -131,11 +135,11 @@ class AccessControlInitializationDetector(AbstractDetector):
 
     def _detect(self):
         results = []
-        
+        CFS: CriticalFunctionsSearcher = CriticalFunctionsSearcher()
 
         for contract in self.compilation_unit.contracts:
 
-            print('PONENTIAL CONSTRUCTORS\n', [f.name for f in find_potential_constructors(contract)], '\n\n')
+            print('PONENTIAL CONSTRUCTORS\n', [f.name for f in CFS.find_potential_constructors(contract)], '\n\n')
 
             # Проверка 1: Устаревшие имена конструкторов (<0.4.22)
             if contract.compilation_unit.solc_version.startswith("0.4"):

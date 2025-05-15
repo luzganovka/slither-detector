@@ -112,30 +112,32 @@ class AccessControlDetector(AbstractDetector):
 
         for contract in self.compilation_unit.contracts:
 
-            print('POTENTIAL CONSTRUCTORS\n', [f.name for f in CFS.find_potential_constructors(contract)], '\n\n')
+            potential_constructors = CFS.find_potential_constructors(contract)
+            print('POTENTIAL CONSTRUCTORS\n', [f.name for f in potential_constructors], '\n\n')
+
+            # Проверка 1. Проверка незащищённых возможных конструкторов
+            for func in potential_constructors:
+                if  not any(m for m in func.modifiers):
+                    info = f"Unprotected potential constructor: {func.name}"
+                    results.append(self.generate_result([info]))
                 
-            # Проверка 1: Устаревшие имена конструкторов (<0.4.22)
+            # Проверка 2: Устаревшие имена конструкторов (<0.4.22)
             if contract.compilation_unit.solc_version.startswith("0.4"):
                 for func in contract.constructors:
                     if func.name != contract.name:
                         info = [f"⚠️ Legacy constructor naming in {contract.name}. Expected '{contract.name}', got '{func.name}'\n"]
                         results.append(self.generate_result(info))
 
-            # Проверка 2: Функции с 'owner' в названии без модификаторов
+            # Проверка 3: Функции с 'owner' в названии без модификаторов
             for func in contract.functions:
                 if "owner" in func.name.lower() and not func.modifiers:
                     info = [f"⚠️ Unprotected owner-change function: {func.name}\n"]
                     results.append(self.generate_result(info))
                 
-                # Проверка 3: Опасные операторы сравнения
+                # Проверка 4: Опасные операторы сравнения
                 for node in func.nodes:
                     if ">=" in str(node.expression) and "balance" in str(node.expression):
                         info = [f"⚠️ Suspicious comparison in {func.name}: {node.expression}\n"]
                         results.append(self.generate_result(info))
-
-                # 2. Проверка незащищённых init-функций
-                # if  and not any(m for m in func.modifiers):
-                #     info = f"Unprotected initialization function: {func.name}"
-                #     results.append(self.generate_result([info]))
         
         return results

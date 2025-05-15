@@ -55,6 +55,13 @@ class CriticalFunctionsSearcher:
         else:
             return False
         
+    """Проверяет наличие конкретных слов в названии функции"""
+    def _name_pattern(self, function):
+        _PATTERNS = ['init', 'constructor']
+        for pattern in _PATTERNS:
+            if pattern in function.name.lower():
+                return True
+        return False
 
     def find_potential_constructors(self, contract: Contract) -> list:
         """
@@ -75,6 +82,7 @@ class CriticalFunctionsSearcher:
                 and self._inits_all_variables(contract, function) \
                 and self._called_at_beginning(function) \
                 or  self._inits_critical_variables(function) \
+                or  self._name_pattern(function) \
                 :
                 potential_constructors.append(function)
 
@@ -83,45 +91,10 @@ class CriticalFunctionsSearcher:
 
 
 
-
-
 from slither.detectors.abstract_detector import AbstractDetector, DetectorClassification
 
-class OLDAccessControlInitializationDetector(AbstractDetector):
-    ARGUMENT = 'access-control-init'
-    HELP = 'Detects access control initialization vulnerabilities'
-    IMPACT = DetectorClassification.HIGH
-    CONFIDENCE = DetectorClassification.MEDIUM
-
-    WIKI = "qwertyui"
-
-    WIKI_TITLE = "qwertyui"
-    WIKI_DESCRIPTION = "qwertyui"
-    WIKI_EXPLOIT_SCENARIO = "qwertyui"
-    WIKI_RECOMMENDATION = "qwertyui"
-    
-    def _detect(self):
-        results = []
-        
-        for contract in self.compilation_unit.contracts:
-            # 1. Проверка старых конструкторов
-            if any(f.name == contract.name for f in contract.functions):
-                info = f"Potential constructor-naming issue in {contract.name}"
-                results.append(self.generate_result([info]))
-            
-            # 2. Проверка незащищённых init-функций
-            for func in contract.functions:
-                if 'init' in func.name.lower() and not any(m for m in func.modifiers):
-                    info = f"Unprotected initialization function: {func.name}"
-                    results.append(self.generate_result([info]))
-        
-        return results
-
-
-from slither.detectors.abstract_detector import AbstractDetector, DetectorClassification
-
-class AccessControlInitializationDetector(AbstractDetector):
-    ARGUMENT = "advanced-access-control"
+class AccessControlDetector(AbstractDetector):
+    ARGUMENT = "access-control"
     HELP = "Detects legacy constructor names, unprotected functions, and logical errors"
     IMPACT = DetectorClassification.HIGH
     CONFIDENCE = DetectorClassification.MEDIUM
@@ -139,8 +112,8 @@ class AccessControlInitializationDetector(AbstractDetector):
 
         for contract in self.compilation_unit.contracts:
 
-            print('PONENTIAL CONSTRUCTORS\n', [f.name for f in CFS.find_potential_constructors(contract)], '\n\n')
-
+            print('POTENTIAL CONSTRUCTORS\n', [f.name for f in CFS.find_potential_constructors(contract)], '\n\n')
+                
             # Проверка 1: Устаревшие имена конструкторов (<0.4.22)
             if contract.compilation_unit.solc_version.startswith("0.4"):
                 for func in contract.constructors:
@@ -159,5 +132,10 @@ class AccessControlInitializationDetector(AbstractDetector):
                     if ">=" in str(node.expression) and "balance" in str(node.expression):
                         info = [f"⚠️ Suspicious comparison in {func.name}: {node.expression}\n"]
                         results.append(self.generate_result(info))
+
+                # 2. Проверка незащищённых init-функций
+                # if  and not any(m for m in func.modifiers):
+                #     info = f"Unprotected initialization function: {func.name}"
+                #     results.append(self.generate_result([info]))
         
         return results

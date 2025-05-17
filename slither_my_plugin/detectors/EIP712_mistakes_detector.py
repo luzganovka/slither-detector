@@ -4,7 +4,7 @@ from slither.core.variables.state_variable import StateVariable
 from slither.core.cfg.node import NodeType
 from slither.core.expressions import Literal
 
-class IncorrectEIP712Detector(AbstractDetector):
+class EIP712MistakesDetector(AbstractDetector):
     ARGUMENT = "incorrect-eip712"
     HELP = "Detects incorrect EIP-712 signature validation"
     IMPACT = DetectorClassification.HIGH

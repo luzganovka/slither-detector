@@ -42,7 +42,9 @@ contract Vulnerable {
         for contract in self.compilation_unit.contracts:
 
             # Ищем переменную DOMAIN_SEPARATOR
-            domain_separator = self._find_domain_separator(contract)
+            domain_separator: StateVariable = self._find_domain_separator(contract)
+            print(f"⚠️ found domain separator: {domain_separator.name}")
+
             if not domain_separator:
                 continue
 
@@ -50,13 +52,13 @@ contract Vulnerable {
             if not domain_separator.is_immutable:
                 info = [f"DOMAIN_SEPARATOR in {contract.name} should be immutable.\n"]
                 results.append(self.generate_result(info))
-                continue
 
             # Check constructor initialization
-            if not self._check_constructor_initialization(contract, domain_separator):
+            omitted:object = self._check_constructor_initialization(contract, domain_separator)
+            if 0 != len(omitted):
                 info = [
                     f"Contract {contract.name} has incorrect EIP-712 DOMAIN_SEPARATOR.\n",
-                    "It should include chainId and verifyingContract in constructor.\n"
+                    "It should include in constructor: ", ", ".join(omitted), "\n"
                 ]
                 results.append(self.generate_result(info))
 
@@ -72,20 +74,25 @@ contract Vulnerable {
 
     def _find_domain_separator(self, contract: Contract) -> StateVariable:
         for var in contract.state_variables:
-            if "DOMAIN_SEPARATOR" in var.name:
+            if "domain" in var.name.lower() and "separator" in var.name.lower():
                 return var
         return None
 
-    def _check_constructor_initialization(self, contract: Contract, var: StateVariable) -> bool:
+    def _check_constructor_initialization(self, contract: Contract, var: StateVariable) -> object:
+        # print(f"⚠️ Searching for init of: {var.name}\n")
+        SHOULD_INCLUDE = ["name", "version",  "chainid", "address(this)"]
+        not_included = []
         for func in contract.constructors:
             for node in func.nodes:
                 for write in node.state_variables_written:
                     if write == var:
                         expr_str = str(node.expression)
-                        return ("chainId" in expr_str and 
-                                "address(this)" in expr_str and
-                                "EIP712Domain(" in expr_str)
-        return False
+                        # print(f"⚠️ found domain separator init: {expr_str}")
+                        for entity in SHOULD_INCLUDE:
+                            if entity not in expr_str:
+                                not_included.append(entity)
+                        return not_included
+        return []
 
     def _check_eip712_prefix_usage(self, contract: Contract) -> bool:
         for func in contract.functions:

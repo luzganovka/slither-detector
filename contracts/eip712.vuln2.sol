@@ -12,15 +12,16 @@ contract SafeEIP712 {
         uint256 expiry;
     }
 
-    bytes32 public immutable DOMAIN_SEPARATOR;
+    bytes32 public immutable DOMAIN_SEPARATOR;  // ОК
 
     constructor() {
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
-                keccak256("EIP712Domain(string name,string version,address verifyingContract)"),
+                keccak256("EIP712Domain(string name,string version"),
                 keccak256("MyDApp"),
-                keccak256("1.0.0"),
-                address(this)
+                keccak256("1.0.0")
+                // Уязвимость 1
+                // отсутствует chainid и address(this)
             )
         );
     }

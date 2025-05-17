@@ -12,7 +12,7 @@ contract SafeEIP712 {
         uint256 expiry;
     }
 
-    bytes32 public immutable DOMAIN_SEPARATOR;
+    bytes32 public immutable DOMAIN_SEPARATOR;  // ОК
 
     constructor() {
         DOMAIN_SEPARATOR = keccak256(
@@ -20,8 +20,8 @@ contract SafeEIP712 {
                 keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256("MyDApp"),
                 keccak256("1.0.0"),
-                block.chainid,
-                address(this)
+                block.chainid,  // ОК
+                address(this)   // ОК
             )
         );
     }
@@ -32,7 +32,6 @@ contract SafeEIP712 {
 
     mapping(bytes32 => bool) public usedSignatures;
 
-    // Уязвимая функция проверки подписи
     function verifyOrder(
         Order calldata order,
         uint8 v,

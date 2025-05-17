@@ -36,66 +36,61 @@ contract Vulnerable {
 ```"""
     WIKI_RECOMMENDATION = "Always include chainId, verifyingContract and \x19\x01 prefix in EIP-712 implementations"
 
-    def _detect(self):
-        results = []
+    contract: Contract              = None
+    domain_separator: StateVariable = None
+    results: object                 = []
 
-        for contract in self.compilation_unit.contracts:
+    """search for the 'DOMAIN_SEPARATOR' variable"""
+    def _find_domain_separator(self) -> bool:
 
-            # Ищем переменную DOMAIN_SEPARATOR
-            domain_separator: StateVariable = self._find_domain_separator(contract)
-            print(f"⚠️ found domain separator: {domain_separator.name}")
-
-            if not domain_separator:
-                continue
-
-            # Check if immutable
-            if not domain_separator.is_immutable:
-                info = [f"DOMAIN_SEPARATOR in {contract.name} should be immutable.\n"]
-                results.append(self.generate_result(info))
-
-            # Check constructor initialization
-            omitted:object = self._check_constructor_initialization(contract, domain_separator)
-            if 0 != len(omitted):
-                info = [
-                    f"Contract {contract.name} has incorrect EIP-712 DOMAIN_SEPARATOR.\n",
-                    "It should include in constructor: ", ", ".join(omitted), "\n"
-                ]
-                results.append(self.generate_result(info))
-
-            # Check for \x19\x01 prefix usage in ecrecover calls
-            if not self._check_eip712_prefix_usage(contract):
-                info = [
-                    f"Contract {contract.name} has incorrect EIP-712 digest computation.\n",
-                    "It should include \\x19\\x01 prefix when hashing.\n"
-                ]
-                results.append(self.generate_result(info))
-
-        return results
-
-    def _find_domain_separator(self, contract: Contract) -> StateVariable:
-        for var in contract.state_variables:
+        for var in self.contract.state_variables:
             if "domain" in var.name.lower() and "separator" in var.name.lower():
-                return var
-        return None
+                self.domain_separator: StateVariable = var
+                # print(f"⚠️ found domain separator: {self.domain_separator.name}")
+                return True
+            
+        self.domain_separator: StateVariable = None
+        return False
 
-    def _check_constructor_initialization(self, contract: Contract, var: StateVariable) -> object:
+    """Check if immutable"""
+    def _check_ds_immutability(self) -> bool:
+
+        if not self.domain_separator.is_immutable:
+            info = [f"DOMAIN_SEPARATOR in {self.contract.name} should be immutable.\n"]
+            self.results.append(self.generate_result(info))
+            return False
+        
+        return True
+
+    """Check constructor initialization"""
+    def _check_ds_constructor_initialization(self) -> bool:
+
         # print(f"⚠️ Searching for init of: {var.name}\n")
         SHOULD_INCLUDE = ["name", "version",  "chainid", "address(this)"]
         not_included = []
-        for func in contract.constructors:
+        for func in self.contract.constructors:
             for node in func.nodes:
                 for write in node.state_variables_written:
-                    if write == var:
+                    if write == self.domain_separator:
                         expr_str = str(node.expression)
                         # print(f"⚠️ found domain separator init: {expr_str}")
                         for entity in SHOULD_INCLUDE:
                             if entity not in expr_str:
                                 not_included.append(entity)
-                        return not_included
-        return []
 
-    def _check_eip712_prefix_usage(self, contract: Contract) -> bool:
-        for func in contract.functions:
+        if 0 != len(not_included):
+            self.results.append(self.generate_result([
+                f"Contract {self.contract.name} has incorrect EIP-712 DOMAIN_SEPARATOR.\n",
+                "It should include in constructor: ", ", ".join(not_included), "\n"
+            ]))
+            return False
+        
+        return True
+
+    """Check for \x19\x01 prefix usage in ecrecover calls"""
+    def _check_1901_prefix_usage(self) -> bool:
+
+        for func in self.contract.functions:
             for node in func.nodes:
                 if (node.type == NodeType.EXPRESSION and 
                     "ecrecover" in str(node.expression)):
@@ -110,4 +105,32 @@ contract Vulnerable {
                     # Alternative check in string representation
                     if "\\x19\\x01" in str(node.expression):
                         return True
+        
+        # \x19\x01 was missed
+        self.results.append(self.generate_result([
+            f"Contract {self.contract.name} has incorrect EIP-712 digest computation.\n",
+            "It should include \\x19\\x01 prefix when hashing.\n"
+        ]))
         return False
+
+    """function that is called by slither detector"""
+    def _detect(self):
+
+        for self.contract in self.compilation_unit.contracts:
+
+            # search for the 'DOMAIN_SEPARATOR' variable
+            if not self._find_domain_separator():
+                continue
+
+            # Check if immutable
+            self._check_ds_immutability()
+
+            # Check constructor initialization
+            self._check_ds_constructor_initialization()
+
+            # Check for \x19\x01 prefix usage in ecrecover calls
+            self._check_1901_prefix_usage()
+
+        return self.results
+
+

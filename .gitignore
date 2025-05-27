@@ -9,4 +9,6 @@ dev
 *.pdf
 *.old
 *.tmp
-contracts/deployed
+test_contracts/**/*
+!test_contracts/my_eip_vuln/
+!test_contracts/my_eip_vuln/**/*

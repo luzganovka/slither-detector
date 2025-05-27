@@ -2,41 +2,7 @@
 
 # --- Конфигурация ---
 SETUP_PY_PATH="$HOME/Study/slither_detector_module/code"
-CONTRACTS_DIR="$HOME/Study/slither_detector_module/smartbugs-curated/access_control"
-CONTRACT_NAMES=(\
-    # "access_control/unprotected0.sol" \
-    # "arithmetic/overflow_single_tx.sol" \
-    # "bad_randomness/lottery.sol" \
-    # "denial_of_service/dos_simple.sol" \
-    # "front_running/FindThisHash.sol" \
-    # "reentrancy/reentrancy_simple.sol" \
-    # "short_addresses/short_address_example.sol" \
-    # "time_manipulation/roulette.sol" \
-    # "unchecked_low_level_calls/lotto.sol" \
-    # "other/naivereceiver.sol" \
-    # "../code/contracts/eip712.vuln.sol" \
-
-    # "arbitrary_location_write_simple.sol" \
-    # "FibonacciBalance.sol" \
-    "incorrect_constructor_name1.sol" \
-    'incorrect_constructor_name2.sol' \
-    'incorrect_constructor_name3.sol' \
-    # 'mapping_write.sol' \
-    'multiowned_vulnerable.sol' \
-    # 'mycontract.sol' \
-    # 'parity_wallet_bug_1.sol' \
-    # 'parity_wallet_bug_2.sol' \
-    # 'phishable.sol' \
-    # 'proxy.sol' \
-    # 'rubixi.sol' \
-    # 'simple_suicide.sol' \
-    'unprotected0.sol' \
-    'wallet_02_refund_nosub.sol' \
-    'wallet_03_wrong_constructor.sol' \
-    'wallet_04_confused_sign.sol' \
-)
-
-
+CONTRACTS_DIR="$HOME/Study/slither_detector_module/code/test_contracts/my_eip_vuln"
 
 # Флаги анализа
 USE_ALL_DETECTORS=true       # Проверить всеми доступными детекторами (включая кастомные)
@@ -122,13 +88,15 @@ echo "🔍 Конфигурация анализа:"
 echo "Использовать все детекторы: $USE_ALL_DETECTORS"
 echo "Выбранные детекторы: $DETECTORS_TO_USE"
 echo "📂 Директория с контрактами: $CONTRACTS_DIR"
-echo "📄 Контракты для анализа: ${CONTRACT_NAMES[@]}"
+echo "📄 Найдено контрактов: $(find "$CONTRACTS_DIR" -name "*.sol" | wc -l)"
 echo "$DELIM"
 
-for contract in "${CONTRACT_NAMES[@]}"; do
-    contract_path="$CONTRACTS_DIR/$contract"
-    if [ ! -f "$contract_path" ]; then
-        echo "⚠️ Ошибка: Контракт $contract не найден в $CONTRACTS_DIR. Пропускаем."
+# Рекурсивный поиск всех .sol файлов
+find "$CONTRACTS_DIR" -type f -name "*.sol" | while read -r contract_path; do
+    contract=$(basename "$contract_path")
+    # Пропускаем пустые файлы
+    if [ ! -s "$contract_path" ]; then
+        echo "⚠️ Пустой файл: $contract_path. Пропускаем."
         continue
     fi
 

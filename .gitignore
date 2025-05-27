@@ -9,8 +9,4 @@ dev
 *.pdf
 *.old
 *.tmp
-<<<<<<< HEAD
-
-=======
->>>>>>> eip712-dev
 contracts/deployed

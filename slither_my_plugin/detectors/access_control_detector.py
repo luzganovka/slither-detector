@@ -110,12 +110,37 @@ class AccessControlDetector(AbstractDetector):
     IMPACT = DetectorClassification.HIGH
     CONFIDENCE = DetectorClassification.MEDIUM
 
-    WIKI = "todo"
+    WIKI = """https://github.com/luzganovka/slither-detector/access_controll_mistakes.md"""
 
-    WIKI_TITLE = "empty"
-    WIKI_DESCRIPTION = "empty"
-    WIKI_EXPLOIT_SCENARIO = "empty"
-    WIKI_RECOMMENDATION = "empty"
+    WIKI_TITLE = "unprotected critical functions"
+    WIKI_DESCRIPTION = "Detects non-legacy constructor names and unprotected critical functions"
+    WIKI_EXPLOIT_SCENARIO = """
+```solidity
+function changeOwner(address newOwner) public {
+    owner = newOwner; // Нет модификатора onlyOwner
+}
+
+function withdrawAll() public {
+    msg.sender.transfer(address(this).balance); // Нет проверки прав
+}
+```
+
+### Пример исправленного кода
+```solidity
+function changeOwner(address newOwner) public onlyOwner {
+    owner = newOwner;
+}
+
+function withdrawAll() public onlyOwner {
+    msg.sender.transfer(address(this).balance);
+}
+```
+### Сценарий атаки
+1. Злоумышленник находит незащищённую функцию changeOwner()
+2. Вызывает её, становясь владельцем контракта
+3. Получает полный контроль над всеми средствами и функциями
+"""
+    WIKI_RECOMMENDATION = "For functions that modify critical variables (for example, owner, admin, root, etc.), an explicit call restriction must be set, most often in the form of a modifier (for example, onlyOwner). Similarly, functions that initialize the contract state (especially in legacy versions of Solidity) must either be correctly defined as constructors or have well-defined call conditions."
 
     """Проверка незащищённых критических функций"""
     def _unprotected_critical_functions(self, contract: Contract, results: object) -> None:

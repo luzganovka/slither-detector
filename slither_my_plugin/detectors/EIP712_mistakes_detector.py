@@ -10,7 +10,7 @@ class EIP712MistakesDetector(AbstractDetector):
     IMPACT = DetectorClassification.HIGH
     CONFIDENCE = DetectorClassification.MEDIUM
 
-    WIKI = "https://github.com/crytic/slither/wiki/Adding-a-new-detector"
+    WIKI = """https://github.com/luzganovka/slither-detector/EIP712_mistakes.md"""
     WIKI_TITLE = "Incorrect EIP-712 Implementation"
     WIKI_DESCRIPTION = "Detects insecure EIP-712 implementations missing critical security checks"
     WIKI_EXPLOIT_SCENARIO = """

@@ -3,6 +3,9 @@ from slither.core.declarations.contract import Contract
 from slither.core.variables.state_variable import StateVariable
 from slither.core.cfg.node import NodeType
 from slither.core.expressions import Literal
+import time
+import csv
+from pathlib import Path
 
 class EIP712MistakesDetector(AbstractDetector):
     ARGUMENT = "incorrect-eip712"
@@ -35,6 +38,9 @@ contract Vulnerable {
 }
 ```"""
     WIKI_RECOMMENDATION = "Always include chainId, verifyingContract and \x19\x01 prefix in EIP-712 implementations"
+
+    # CSV файл для логов
+    TIMING_LOG = Path("timing/inside_detector_timings.csv")
 
     contract: Contract              = None
     domain_separator: StateVariable = None
@@ -115,7 +121,7 @@ contract Vulnerable {
 
     """function that is called by slither detector"""
     def _detect(self):
-
+        start_time = time.perf_counter()
         for self.contract in self.compilation_unit.contracts:
 
             # search for the 'DOMAIN_SEPARATOR' variable
@@ -131,6 +137,16 @@ contract Vulnerable {
             # Check for \x19\x01 prefix usage in ecrecover calls
             self._check_1901_prefix_usage()
 
+        elapsed = time.perf_counter() - start_time
+        # Записываем в лог время В МИКРОСЕКУНДАХ
+        with open(self.TIMING_LOG, "a") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                self.compilation_unit.contracts[0].name,
+                self.ARGUMENT,
+                round(elapsed * 1e6, 0),
+            ])
+            
         return self.results
 
 

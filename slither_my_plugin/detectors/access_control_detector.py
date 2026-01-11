@@ -1,5 +1,8 @@
 from slither.core.declarations import Contract
 from slither.core.variables.state_variable import StateVariable
+import time
+import csv
+from pathlib import Path
 
 """
 Различные эвристики для проверки,
@@ -85,12 +88,12 @@ class CriticalFunctionsSearcher:
 
             # Проверка всех условий
             if      self._has_few_args(function) \
-                and self._called_at_beginning(function) \
                 and  self._inits_all_variables(contract, function) \
                 or  self._inits_critical_variables(function) \
                 or  self._name_pattern(function) \
                 :
                 critical_functions.append(function)
+                #and self._called_at_beginning(function) \
 
         return critical_functions
 
@@ -142,6 +145,9 @@ function withdrawAll() public onlyOwner {
 """
     WIKI_RECOMMENDATION = "For functions that modify critical variables (for example, owner, admin, root, etc.), an explicit call restriction must be set, most often in the form of a modifier (for example, onlyOwner). Similarly, functions that initialize the contract state (especially in legacy versions of Solidity) must either be correctly defined as constructors or have well-defined call conditions."
 
+    # CSV файл для логов
+    TIMING_LOG = Path("timing/inside_detector_timings.csv")
+
     """Проверка незащищённых критических функций"""
     def _unprotected_critical_functions(self, contract: Contract, results: object) -> None:
 
@@ -170,6 +176,7 @@ function withdrawAll() public onlyOwner {
                     results.append(self.generate_result(info))
 
     def _detect(self):
+        start_time = time.perf_counter()
         results = []
         self.CFS: CriticalFunctionsSearcher = CriticalFunctionsSearcher()
 
@@ -184,4 +191,14 @@ function withdrawAll() public onlyOwner {
             # Проверка 3: Неправильные имена конструкторов для устаревших версий solc (<0.4.22)
             self._outdated_constructor_names(contract, results)
         
+        elapsed = time.perf_counter() - start_time
+        # Записываем в лог время В МИКРОСЕКУНДАХ
+        with open(self.TIMING_LOG, "a") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                self.compilation_unit.contracts[0].name,
+                self.ARGUMENT,
+                round(elapsed * 1e6, 0),
+            ])
+            
         return results

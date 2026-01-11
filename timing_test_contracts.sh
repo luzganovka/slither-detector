@@ -2,10 +2,10 @@
 
 # --- Конфигурация ---
 SETUP_PY_PATH="$HOME/Study/slither_detector_module/code"
-DETECTORS="incorrect-eip712,access-control"
-CONTRACTS_DIR="$HOME/Study/slither_detector_module/code/test_contracts/my_eip_vuln"
+DETECTORS="incorrect-eip712"
+CONTRACTS_DIR="$HOME/Study/slither_detector_module/code/test_contracts/for_timing"
 LOG_FILE="timing/analysis_$(date +%Y%m%d_%H%M%S).log"
-TIMINGS_FILE="timing/timings.csv"
+TIMINGS_FILE="timing/external_timing_ALL.csv"
 
 # Поддерживаемые версии solc (только стабильные релизы)
 LAST_VERSIONS=("0.4.26" "0.5.17" "0.6.12" "0.7.6" "0.8.26")
@@ -41,7 +41,6 @@ analyze_contract() {
     # запуск и таймирование slither
     local start_time=$(date +%s.%N)
     slither_output=$(slither "$contract_path" \
-        --detect "$DETECTORS" \
         --solc-solcs-bin "$(which solc)" \
         2>&1)
     local end_time=$(date +%s.%N)

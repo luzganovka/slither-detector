@@ -1,9 +1,7 @@
 from slither.detectors.abstract_detector import AbstractDetector, DetectorClassification
-from slither.core.declarations import Function, Contract
-from slither.core.expressions import CallExpression, MemberAccess
-from slither.slithir.operations import HighLevelCall
-from slither.slithir.operations import Assignment
-from slither.core.cfg.node import Node
+from slither.slithir.operations import HighLevelCall, InternalCall, Assignment, Return
+from slither.core.declarations import Function
+
 
 TRUSTED_CHAINLINK_METHODS = {
     "latestRoundData",
@@ -13,6 +11,7 @@ TRUSTED_CHAINLINK_METHODS = {
 
 DEX_ORACLE_KEYWORDS = {
     "getReserves",
+    "getPrice",
     "price0CumulativeLast",
     "price1CumulativeLast",
     "token0",
@@ -27,20 +26,18 @@ CRITICAL_FINANCIAL_METHODS = {
     "borrow",
     "redeem",
     "withdraw",
+    "repay",
+    "trade"
 }
 
 
 class PriceOracleManipulation(AbstractDetector):
-    """
-    Detect price oracle manipulation vulnerability
-    """
-
     ARGUMENT = "price-oracle-manipulation"
-    HELP = "Detects potentially manipulable price oracles used in critical financial calculations"
+    HELP = "Detect manipulable oracle usage with interprocedural taint tracking"
     IMPACT = DetectorClassification.HIGH
     CONFIDENCE = DetectorClassification.MEDIUM
 
-    WIKI = "TODO"
+    WIKI = """https://github.com/luzganovka/slither-detector/Oracle_manipulation_vulnarability.md"""
     WIKI_TITLE = "Price Oracle Manipulation"
     WIKI_DESCRIPTION = (
         "Smart contracts that consume price data from external oracles "
@@ -56,117 +53,156 @@ class PriceOracleManipulation(AbstractDetector):
         "TWAP/median aggregation or multiple oracles."
     )
 
-    #
-    # --- helper detectors ---
-    #
+    # ---------------- fields -------------------------------
 
-    def _is_chainlink_oracle_call(self, ir: HighLevelCall) -> bool:
+    def __init__(self, slither, solc_values, result_reporter):
+        super().__init__(slither, solc_values, result_reporter)
+        self.results = []
+        self.tainted_returns = {}
+        self.tainted_returns_changed = True
+
+    # ---------------- oracle identification ----------------
+
+    def _is_chainlink(self, ir):
         if ir.function is None:
             return False
-
         if ir.function.name in TRUSTED_CHAINLINK_METHODS:
             return True
-
-        if ir.function.contract and "AggregatorV3Interface" in ir.function.contract.name:
+        if ir.function.contract and "Aggregator" in ir.function.contract.name:
             return True
-
         return False
 
-    def _is_dex_oracle_call(self, ir: HighLevelCall) -> bool:
+    def _is_dex_oracle(self, ir):
         if ir.function is None:
             return False
-
-        for kw in DEX_ORACLE_KEYWORDS:
-            if kw in ir.function.name:
+        for k in DEX_ORACLE_KEYWORDS:
+            if k in ir.function.name:
                 return True
-
         return False
-
-    def _is_external_call(self, ir: HighLevelCall, current_contract) -> bool:
-        # unknown destination => treat as external
-        if ir.function is None:
-            return True
-
-        if ir.function.contract is None:
-            return True
-
-        return ir.function.contract != current_contract
-
+    
     def _is_critical_financial_function(self, function):
         for kw in CRITICAL_FINANCIAL_METHODS:
             if kw in function.name.lower():
                 return True
         return False
 
-    def _propagate_taint(self, tainted_vars, node):
-        for ir in node.irs:
-            if isinstance(ir, Assignment):
-                if ir.rvalue in tainted_vars:
-                    tainted_vars.add(ir.lvalue)
+    def _report(self, function_name, oracle_type, tainted):
+        if oracle_type == "dex":
+            impact = "HIGH (DEX oracle — flash-loan manipulable)"
+        elif oracle_type == "custom_external":
+            impact = "MEDIUM (custom external oracle)"
+        else:
+            impact = "LOW (trusted oracle or unclear)"
 
-    #
-    # --- main detection ---
-    #
+        info = [
+            f"Function: {function_name}\n",
+            f"Oracle type: {oracle_type}\n",
+            f"Impact: {impact}\n",
+            f"Tainted vars: {', '.join(str(v) for v in tainted)}\n",
+        ]
 
-    def _detect(self):
-        results = []
+        self.results.append(self.generate_result(info))
 
-        for contract in self.slither.contracts:
-            for function in contract.functions_and_modifiers:
+    # ---------------- per-function taint ----------------
 
-                tainted = set()
-                oracle_type = None
+    def _analyze_function_internal(self, function):
+        """
+        Returns True if function returns tainted value
+        """
+        
+        tainted = set()
+        oracle_type = None
+        info = None
 
-                for node in function.nodes:
-                    for ir in node.irs:
+        # print(f"DEBUG | _analyze_function_internal({function}):")
+        for node in function.nodes:
+            for ir in node.irs:
 
-                        #
-                        # external / oracle calls
-                        #
-                        if isinstance(ir, HighLevelCall):
+                # oracle call → taint result
+                if isinstance(ir, HighLevelCall):
 
-                            # skip internal calls
-                            if not self._is_external_call(ir, contract):
-                                continue
+                    # internal or high-level call
+                    if isinstance(ir, (HighLevelCall, InternalCall)) and isinstance(ir.function, Function):
+                    # if isinstance(ir.function, (function.internal_calls, function.external_calls)):
+                        callee = ir.function
+                        callee_oracle_type = self.tainted_returns.get(callee, None)
+                        # print(f"DEBUG | '{function.name}' calls '{callee.name}', that has '{callee_oracle_type}' oracle vuln type")
+                        if callee_oracle_type:
+                            tainted.add(ir.lvalue)
+                            oracle_type = callee_oracle_type
 
-                            # trusted oracle
-                            if self._is_chainlink_oracle_call(ir):
-                                oracle_type = "trusted_chainlink"
-                                continue
-
-                            # dex oracle (high risk)
-                            if self._is_dex_oracle_call(ir):
-                                oracle_type = "dex"
-                                tainted.add(ir.lvalue)
-                                continue
-
-                            # other external call returning value
-                            oracle_type = "custom_external"
+                    # manipulable DEX oracle
+                    if self._is_dex_oracle(ir):
+                        oracle_type = "dex"
+                        if ir.lvalue:
                             tainted.add(ir.lvalue)
 
-                    # propagate taint inside function
-                    self._propagate_taint(tainted, node)
+                    # any unknown oracle except chainlink
+                    if not self._is_chainlink(ir):
+                        oracle_type = "custom_external"
+                        if ir.lvalue:
+                            tainted.add(ir.lvalue)
 
-                #
-                # if tainted value influences critical finance logic
-                #
-                print(f"\n\nDEBUG | Tainted vars: {', '.join(str(v) for v in tainted)}\n\n")
-                if tainted and self._is_critical_financial_function(function):
+                # taint propagation by assignment
+                if isinstance(ir, Assignment):
+                    if ir.rvalue in tainted:
+                        tainted.add(ir.lvalue)
 
-                    if oracle_type == "dex":
-                        impact = "HIGH (DEX oracle — flash-loan manipulable)"
-                    elif oracle_type == "custom_external":
-                        impact = "MEDIUM (custom external oracle)"
-                    else:
-                        impact = "LOW (trusted oracle or unclear)"
+                # return statement — Slither IR
+                if isinstance(ir, Return) and (self.tainted_returns.get(function, None) == None):
+                    # print(f"DEBUG | Found return ir in {function.name}")
+                    # print(f"DEBUG | returned valuse are: {[getattr(v, 'name', str(v)) for v in ir.values]}")
+                    for v in ir.values:
+                        if v in tainted:
+                            # print(f"DEBUG | {function.name} returns tained!")
+                            self.tainted_returns[function] = oracle_type
+                            self.tainted_returns_changed = True
 
-                    info = [
-                        f"Function: {function.full_name}\n",
-                        f"Oracle type: {oracle_type}\n",
-                        f"Impact: {impact}\n",
-                        f"Tainted vars: {', '.join(str(v) for v in tainted)}\n",
-                    ]
+                            self._report(function.full_name, oracle_type, tainted)
 
-                    results.append(self.generate_result(info))
+        #
+        # if tainted value influences critical finance logic
+        #
+        if tainted and self._is_critical_financial_function(function):
 
-        return results
+            self._report(function.full_name, oracle_type, tainted)
+
+        # print(f"\treturns_tainted = {self.tainted_returns.get(function, None)},\n\
+        #       \tlocal vulns = {info}\n\
+        #       \tTainted vars = {[getattr(v, 'name', str(v)) for v in tainted]}\n")
+        return
+
+    # ---------------- main detector ----------------
+
+    def _detect(self):
+
+        for contract in self.slither.contracts:
+            self.tainted_returns_changed = True
+
+            # step 1: intra-procedural taint
+            while (self.tainted_returns_changed == True):
+                self.tainted_returns_changed = False
+                for f in contract.functions:
+                    self._analyze_function_internal(f)
+
+
+            # step 2: final reporting
+            for f in contract.functions:
+
+                # print (f"DEBUG | Function `{f.full_name} tained? --> {self.tainted_returns.get(f)}\n")
+
+                if not self.tainted_returns.get(f, False):
+                    continue
+
+                if not any(key in f.name.lower() for key in CRITICAL_FINANCIAL_METHODS):
+                    continue
+
+                info = [
+                    f"Function `{f.full_name}` depends on manipulable oracle-derived price",
+                    "Tainted value returned from another function",
+                    "Interprocedural taint propagation detected"
+                ]
+
+                self.results.append(self.generate_result(info))
+
+        return self.results

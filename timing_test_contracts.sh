@@ -2,7 +2,7 @@
 
 # --- Конфигурация ---
 SETUP_PY_PATH="$HOME/Study/slither_detector_module/code"
-DETECTORS="incorrect-eip712"
+DETECTORS="price-oracle-manipulation"
 CONTRACTS_DIR="$HOME/Study/slither_detector_module/code/test_contracts/for_timing"
 LOG_FILE="timing/analysis_$(date +%Y%m%d_%H%M%S).log"
 TIMINGS_FILE="timing/external_timing_ALL.csv"

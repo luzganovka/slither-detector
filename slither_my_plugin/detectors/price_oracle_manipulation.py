@@ -1,6 +1,8 @@
 from slither.detectors.abstract_detector import AbstractDetector, DetectorClassification
 from slither.slithir.operations import HighLevelCall, InternalCall, Assignment, Return
 from slither.core.declarations import Function
+import time, csv
+from pathlib import Path
 
 
 TRUSTED_CHAINLINK_METHODS = {
@@ -52,6 +54,9 @@ class PriceOracleManipulation(AbstractDetector):
         "Validate oracle prices with require() conditions, sanity checks, "
         "TWAP/median aggregation or multiple oracles."
     )
+
+    # CSV файл для логов
+    TIMING_LOG = Path("timing/inside_detector_timings.oracle.csv")
 
     # ---------------- fields -------------------------------
 
@@ -176,6 +181,8 @@ class PriceOracleManipulation(AbstractDetector):
 
     def _detect(self):
 
+        start_time = time.perf_counter()
+
         for contract in self.slither.contracts:
             self.tainted_returns_changed = True
 
@@ -204,5 +211,15 @@ class PriceOracleManipulation(AbstractDetector):
                 ]
 
                 self.results.append(self.generate_result(info))
+
+        elapsed = time.perf_counter() - start_time
+        # Записываем в лог время В МИКРОСЕКУНДАХ
+        with open(self.TIMING_LOG, "a") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                self.compilation_unit.contracts[0].name,
+                self.ARGUMENT,
+                round(elapsed * 1e6, 0),
+            ])
 
         return self.results

@@ -2,7 +2,7 @@
 
 # --- Конфигурация ---
 SETUP_PY_PATH="$HOME/Study/slither_detector_module/code"
-CONTRACTS_DIR="$HOME/Study/slither_detector_module/code/test_contracts/for_timing/my_oracle_manipulations_vuln"
+CONTRACTS_DIR="$HOME/Study/slither_detector_module/code/test_contracts/safe_deployed"
 
 # Флаги анализа
 USE_ALL_DETECTORS=false       # Проверить всеми доступными детекторами (включая кастомные)
@@ -50,7 +50,7 @@ get_required_solc() {
     # Ищем строку pragma solidity и извлекаем версию
     local pragma_line=$(grep -m 1 -E "pragma solidity\s*(.*);" "$contract_path")
     
-    if [[ "$pragma_line" =~ \^0\.([0-9]+)\.[0-9]+\; ]]; then
+    if [[ "$pragma_line" =~ 0\.([0-9]+)\.[0-9]+\; ]]; then
         local major_version=${BASH_REMATCH[1]}
         for version in "${LAST_VERSIONS[@]}"; do
             if [[ "$version" =~ 0\.$major_version\.[0-9]+ ]]; then
@@ -58,7 +58,7 @@ get_required_solc() {
                 return
             fi
         done
-    elif [[ "$pragma_line" =~ \^0\.([0-9]+)\; ]]; then
+    elif [[ "$pragma_line" =~ 0\.([0-9]+)\; ]]; then
         local major_version=${BASH_REMATCH[1]}
         for version in "${LAST_VERSIONS[@]}"; do
             if [[ "$version" =~ 0\.$major_version\.[0-9]+ ]]; then
@@ -108,7 +108,7 @@ find "$CONTRACTS_DIR" -type f -name "*.sol" | while read -r contract_path; do
     echo "📋 Анализ $contract..."
     
     if [ "$DETECTORS_TO_USE" = "all" ]; then
-        slither "$contract_path" --solc-solcs-bin "$(which solc)"
+        slither "$contract_path" --solc-solcs-bin "$(which solc)" 2>/dev/null
     else
         slither "$contract_path" --detect "$DETECTORS_TO_USE" --solc-solcs-bin "$(which solc)"
     fi

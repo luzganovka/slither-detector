@@ -1,3 +1,3 @@
 #!/bin/bash
 pip install -e .
-slither contracts/eip712.vuln.sol --detect incorrect-eip712
+slither test_contracts/for_timing/my_oracle_manipulations_vuln/oracle.vuln.1.sol --detect price-oracle-manipulation

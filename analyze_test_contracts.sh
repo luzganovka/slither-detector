@@ -2,13 +2,13 @@
 
 # --- Конфигурация ---
 SETUP_PY_PATH="$HOME/Study/slither_detector_module/code"
-CONTRACTS_DIR="$HOME/Study/slither_detector_module/code/test_contracts/safe_deployed"
+CONTRACTS_DIR="$SETUP_PY_PATH/test_contracts/for_timing/mythril_delegate_call"
 
 # Флаги анализа
 USE_ALL_DETECTORS=false       # Проверить всеми доступными детекторами (включая кастомные)
 
 # Детекторы (актуально когда флаг false)
-DETECTORS="price-oracle-manipulation"
+DETECTORS="mythril-delegatecall"
 
 # Устанавливаем последние версии для каждой major версии (0.4.x, 0.5.x и т.д.)
 LAST_VERSIONS=("0.4.26" "0.5.17" "0.6.12" "0.7.6" "0.8.23")

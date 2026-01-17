@@ -2,6 +2,7 @@ from slither.detectors.abstract_detector import AbstractDetector, DetectorClassi
 from slither.core.declarations import Contract
 from slither.core.cfg.node import NodeType
 import requests
+import warnings
 
 class MythrilDelegatecallDetector(AbstractDetector):
     """
@@ -53,7 +54,7 @@ class MythrilDelegatecallDetector(AbstractDetector):
             resp.raise_for_status()
             return resp.json()
         except Exception as e:
-            print(f"DEBUG | Error while calling server: {e}")
+            warnings.warn(f"Error while calling server: {e}")
             # Для PoC: не валим Slither целиком
             return []
 
@@ -87,7 +88,11 @@ class MythrilDelegatecallDetector(AbstractDetector):
 
             # call mythril service
             print(f"DEBUG | Calling mythril")
-            issues = self.run_mythril_server(bytecode)
+            result = self.run_mythril_server(bytecode)
+            if not result.get('success', False):
+                warnings.warn(f"Mythril fails with error:{result.get('error', 'no error field')}")
+                continue
+            issues = result['issues']
             print(f"DEBUG | Got issues from mythril: {issues}")
 
             if not isinstance(issues, list):

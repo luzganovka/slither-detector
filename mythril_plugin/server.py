@@ -2,6 +2,7 @@ import subprocess
 import json
 import tempfile
 from flask import Flask, request, jsonify
+import os
 
 app = Flask(__name__)
 
@@ -32,10 +33,14 @@ def run_mythril(bytecode: str) -> dict:
     try:
         proc = subprocess.run(
             cmd,
-            input=bytecode.encode(),
+            # input=bytecode.encode(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            timeout=90
+            timeout=90,
+            # env={
+            #     **os.environ,
+            #     "PYTHONWARNINGS": "ignore"
+            # }
         )
     except subprocess.TimeoutExpired:
         return {
@@ -43,21 +48,21 @@ def run_mythril(bytecode: str) -> dict:
             "error": "Mythril timeout"
         }
 
-    if proc.returncode != 0:
-        return {
-            "success": False,
-            "error": proc.stderr.decode(errors="ignore")
-        }
+    stdout = proc.stdout.decode(errors="ignore")
+    stderr = proc.stderr.decode(errors="ignore")
 
     try:
+        data = json.loads(stdout)
         return {
             "success": True,
-            "raw": json.loads(proc.stdout.decode())
+            "raw": data,
+            "warnings": stderr.strip() or None
         }
     except json.JSONDecodeError:
         return {
-            "success": False,"success": False,
-            "error": "Failed to parse Mythril JSON output"
+            "success": False,
+            "error": stderr or "Failed to parse Mythril output",
+            "stdout": stdout
         }
 
 

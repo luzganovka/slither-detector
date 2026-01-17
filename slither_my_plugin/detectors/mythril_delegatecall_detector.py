@@ -1,10 +1,7 @@
-import subprocess
-import json
-import tempfile
-import os
-
 from slither.detectors.abstract_detector import AbstractDetector, DetectorClassification
-
+from slither.core.declarations import Contract
+from slither.core.cfg.node import NodeType
+import requests
 
 class MythrilDelegatecallDetector(AbstractDetector):
     """
@@ -31,99 +28,89 @@ class MythrilDelegatecallDetector(AbstractDetector):
         "and avoid delegatecall in fallback functions without validation."
     )
 
-    # путь к myth бинарнику (из mythril_venv)
-    MYTH_BINARY = os.path.expanduser("~/Study/slither_detector_module/code/mythril_venv/bin/myth")
+    MYTHRIL_ENDPOINT = "http://localhost:5000/analyze"
 
-    def _run_mythril(self, bytecode: str):
-        """
-        Run mythril on bytecode and return parsed JSON output
-        """
-        with tempfile.NamedTemporaryFile(mode="w+", suffix=".hex", delete=True) as f:
-            f.write(bytecode)
-            f.flush()
+  # ---------- source-level prefilter ----------
 
-            cmd = [
-                self.MYTH_BINARY,
-                "analyze",
-                "-c", f.name,
-                "-o", "json",
-                "--execution-timeout", "30",
-                "--max-depth", "22"
-            ]
+    def has_delegatecall(self, contract: Contract) -> bool:
+        for f in contract.functions:
+            for node in f.nodes:
+                if node.type == NodeType.EXPRESSION:
+                    if "delegatecall" in str(node.expression):
+                        return True
+        return False
 
-            try:
-                proc = subprocess.run(
-                    cmd,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    timeout=60
-                )
-            except Exception as e:
-                return None, f"Mythril execution failed: {e}"
 
-            if proc.returncode != 0:
-                return None, proc.stderr
+  # ---------- mythril oracle ----------
 
-            try:
-                return json.loads(proc.stdout), None
-            except json.JSONDecodeError:
-                return None, "Failed to parse Mythril JSON output"
+    def run_mythril_server(self, bytecode: str):
+        try:
+            resp = requests.post(
+                self.MYTHRIL_ENDPOINT,
+                json={"bytecode": bytecode},
+                timeout=90,
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            print(f"DEBUG | Error while calling server: {e}")
+            # Для PoC: не валим Slither целиком
+            return []
+
+
+   # ---------- issue filtering ----------
+
+    def is_delegatecall_issue(self, issue: dict) -> bool:
+        title = issue.get("title", "")
+        return "DELEGATECALL" in title.upper()
+
+    # ---------- main detector ----------
 
     def _detect(self):
         results = []
 
         for contract in self.slither.contracts:
+            # source-level prefilter
+            if not self.has_delegatecall(contract):
+                print(f"DEBUG | No delegatecall in a contract. Skipping")
+                continue
 
-            # Get the initialization (creation) bytecode
-            # This includes the constructor and the runtime bytecode
-            bytecode_init = contract.file_scope.bytecode_init(
+            # extract runtime bytecode
+            bytecode = contract.file_scope.bytecode_runtime(
                 contract.compilation_unit.crytic_compile_compilation_unit,
                 contract.name
             )
-            # print(f"Initialization Bytecode: {bytecode_init}\n")
 
-            # Get the runtime bytecode
-            # This is the code deployed to the blockchain after the constructor runs
-            bytecode_runtime = contract.file_scope.bytecode_runtime(
-                contract.compilation_unit.crytic_compile_compilation_unit,
-                contract.name
-            )
-            # print(f"Runtime Bytecode: {bytecode_runtime}\n")
-            if not bytecode_runtime:
-                print(f"DEBUG | No bytecode_runtime!")
+            if not bytecode:
+                print(f"DEBUG | No bytecode in a contract. Skipping")
                 continue
 
-            mythril_output, error = self._run_mythril(bytecode_runtime)
+            # call mythril service
+            print(f"DEBUG | Calling mythril")
+            issues = self.run_mythril_server(bytecode)
+            print(f"DEBUG | Got issues from mythril: {issues}")
 
-            if error:
-                info = [
-                    f"Mythril error for contract `{contract.name}`",
-                    error
-                ]
-                results.append(self.generate_result(info))
+            if not isinstance(issues, list):
+                print(f"DEBUG | Issues is not a list. Skipping")
                 continue
 
-            issues = mythril_output.get("issues", [])
-
+            # filter delegatecall-related findings
             for issue in issues:
-                title = issue.get("title", "").lower()
+                if not self.is_delegatecall_issue(issue):
+                    continue
 
-                # фильтр именно delegatecall
-                # if "delegatecall" not in title:
-                #     continue
+                title = issue.get("title", "Delegatecall misuse")
+                severity = issue.get("severity", "Unknown")
 
-                info = [
-                    f"Mythril finding: {issue.get('title')}",
-                    f"Contract: {contract.name}",
-                    f"Severity: {issue.get('severity')}",
-                    f"Description: {issue.get('description')}",
-                ]
-
-                # если Mythril указал адрес инструкции
-                if "address" in issue:
-                    info.append(f"EVM PC: {issue['address']}")
-
-                results.append(self.generate_result(info))
+                results.append(
+                    self.generate_result(
+                        info=[
+                            contract,
+                            "\nDelegatecall misuse detected via Mythril (bytecode-level)\n",
+                            f"Issue: {title}\n",
+                            f"Severity: {severity}\n",
+                        ]
+                    )
+                )
 
         return results

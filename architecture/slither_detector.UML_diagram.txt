@@ -1,0 +1,65 @@
+@startuml
+title Работа кастомного детектора Slither (source-level анализ)
+
+actor "Пользователь" as User
+
+participant "Slither CLI / API" as Slither
+participant "CryticCompile\n(solc frontend)" as CC
+participant "AST / CFG Builder" as Builder
+participant "IR (SlithIR)" as IR
+participant "AbstractDetector\n(Custom Detector)" as Detector
+participant "Report Engine" as Report
+
+== Инициализация анализа ==
+
+User -> Slither++: Исходный код Solidity\n(.sol файлы)
+Slither -> CC++: Компиляция контрактов\n(solc)
+CC --> Slither--: AST + metadata
+
+== Построение внутренних представлений ==
+
+Slither -> Builder++: Построение CFG
+Builder -> Builder: Создание Contract объектов
+Builder -> Builder: Создание Function объектов
+Builder -> Builder: Создание Node (CFG)
+Builder --> Slither--: CFG-графы
+
+Slither -> IR++: Генерация SlithIR
+IR -> IR: Преобразование Node → IR-операции
+IR -> IR: Assignment, Call, Return,\nHighLevelCall, InternalCall
+IR --> Slither--: IR-граф
+
+== Запуск детекторов ==
+
+Slither -> Detector++: Передача Slither state\n(contracts, functions, IR)
+
+Detector -> Detector: Итерация по Contract
+Detector -> Detector: Анализ Function
+Detector -> Detector: Анализ Node CFG
+Detector -> Detector: Анализ IR-операций
+
+alt Локальный анализ
+    Detector -> Detector: intra-procedural analysis
+    Detector -> Detector: проверка IR паттернов
+end
+
+alt Межпроцедурный анализ
+    Detector -> Detector: propagation через call graph
+    Detector -> Detector: taint через return values
+    Detector -> Detector: taint через storage write/read
+end
+
+Detector -> Detector: Формирование finding
+Detector -> Detector: generate_result()
+
+Detector --> Slither--: Список результатов детектора
+
+== Агрегация и отчёт ==
+
+Slither -> Report++: Агрегация результатов
+Report -> Report: Нормализация severity
+Report -> Report: Связывание с source locations
+Report --> Slither--: Финальный отчёт
+
+Slither -->> User--: Отчёт об уязвимостях
+@enduml

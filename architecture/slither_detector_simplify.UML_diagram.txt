@@ -1,0 +1,13 @@
+actor "Пользователь" as user
+
+participant "slither" as slither
+participant "delegatecall детектор slither" as detector
+
+user -> slither++: исходный код контракта
+slither -> slither: конфертация в AST-граф
+
+
+slither -> detector++: IR-представление
+detector -> detector: статический анализ
+detector -->> slither--: cписок результатов детектора
+slither -->> user: отчёт

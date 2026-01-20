@@ -1,0 +1,36 @@
+@startuml
+actor "Пользователь" as user
+box "Инструмент Slither, развёрнут локально"
+  participant "slither" as slither
+  participant "delegatecall детектор slither" as detector
+box end
+box "Инструмент Mythril, развёрнут на сервере / в контейнере"
+  participant "сервер-обработчик" as server
+  participant "mythril" as mythril
+box end
+
+user -> slither++: Исходный код контракта
+slither -> slither: конфертация в AST-граф
+
+opt подозрений на delegatecall не выявлено
+slither -> detector++: IR-представление
+detector -> detector: статический анализ
+detector -->> slither--: отчёт
+slither -->> user: отчёт
+end
+
+slither -> detector++: IR-представление
+detector -> detector: статический анализ
+detector -> slither: запрос на компиляцию
+slither -->> detector: байт-код
+detector -> server++: POST-запрос на анализ, байт-код
+
+server -> mythril++: байткод
+mythril -> mythril: символьное исполнение
+mythril -->> server--: сообщения
+server -> server: нормализация сообщений
+server -->> detector--: сообщения
+detector -> detector: фильтрация и обогащение сообщений
+detector -->> slither--: список результатов детектора
+slither -->> user--: отчёт
+@enduml
